@@ -1,0 +1,20 @@
+{
+  "name": "api-boletas",
+  "version": "1.0.0",
+  "description": "API REST con API Key + JWT y MySQL para mantenimiento de registros de boletas de pago",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "crear-usuario": "node scripts/crearUsuario.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.0"
+  }
+}
