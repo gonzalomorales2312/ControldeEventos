@@ -3,7 +3,14 @@ const pool = require('../config/db');
 
 const router = express.Router();
 
-const CAMPOS = ['nombre_lanzado', 'nombre_lider', 'subred', 'numero_boleta', 'monto_boleta'];
+const CAMPOS = ['nombre_lanzado', 'nombre_lider', 'subred', 'numero_boleta', 'monto_boleta', 'imagen_boleta'];
+
+// Columnas del listado: no incluye la imagen (pesada); se indica con tiene_imagen y se obtiene con GET /:id
+const COLUMNAS_LISTA =
+  'id, nombre_lanzado, nombre_lider, subred, numero_boleta, monto_boleta, (imagen_boleta IS NOT NULL) AS tiene_imagen, activo, creado_en, actualizado_en';
+
+// Acepta base64 puro o un data URI (data:image/png;base64,....)
+const RE_BASE64 = /^(data:image\/[a-zA-Z0-9.+-]+;base64,)?[A-Za-z0-9+/\r\n]+={0,2}$/;
 
 // nombre_lanzado es opcional: en blanco significa que quien paga es el líder
 const limpioLanzado = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -20,6 +27,11 @@ function validar(body, parcial = false) {
   if (b.nombre_lanzado !== undefined && b.nombre_lanzado !== null && typeof b.nombre_lanzado !== 'string') {
     errores.push('nombre_lanzado debe ser texto (déjelo en blanco si paga el líder)');
   }
+  if (b.imagen_boleta !== undefined && b.imagen_boleta !== null && b.imagen_boleta !== '') {
+    if (typeof b.imagen_boleta !== 'string' || !RE_BASE64.test(b.imagen_boleta)) {
+      errores.push('imagen_boleta debe ser una imagen en base64 (texto)');
+    }
+  }
   if (typeof b.subred === 'string' && b.subred.trim().length > 100) {
     errores.push('subred no puede superar 100 caracteres');
   }
@@ -30,6 +42,10 @@ function validar(body, parcial = false) {
 }
 
 function errorInterno(res, err) {
+  // MariaDB corta la conexión (ECONNRESET) cuando el paquete supera max_allowed_packet
+  if (['ER_NET_PACKET_TOO_LARGE', 'ER_WARN_ALLOWED_PACKET_OVERFLOWED', 'ECONNRESET'].includes(err.code)) {
+    return res.status(413).json({ error: 'La imagen es demasiado grande para el límite max_allowed_packet de MariaDB' });
+  }
   console.error(err);
   res.status(500).json({ error: 'Error interno del servidor' });
 }
@@ -91,7 +107,7 @@ router.get('/', async (req, res) => {
 
     const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM registros ${where}`, params);
     const [rows] = await pool.query(
-      `SELECT * FROM registros ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      `SELECT ${COLUMNAS_LISTA} FROM registros ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
 
@@ -130,7 +146,7 @@ router.post('/', async (req, res) => {
 
     const [result] = await conn.query(
       `INSERT INTO registros (${CAMPOS.join(', ')}) VALUES (${CAMPOS.map(() => '?').join(', ')})`,
-      CAMPOS.map((c) => body[c])
+      CAMPOS.map((c) => (c === 'imagen_boleta' ? body[c] || null : body[c]))
     );
     const [[registro]] = await conn.query('SELECT * FROM registros WHERE id = ?', [result.insertId]);
 
@@ -164,7 +180,8 @@ router.put('/:id', async (req, res) => {
   const errores = validar(body, true);
   if (errores.length) return res.status(400).json({ errores });
 
-  const valor = (c) => (c === 'nombre_lanzado' ? limpioLanzado(body[c]) : body[c]);
+  const valor = (c) =>
+    c === 'nombre_lanzado' ? limpioLanzado(body[c]) : c === 'imagen_boleta' ? body[c] || null : body[c];
 
   const conn = await pool.getConnection();
   try {

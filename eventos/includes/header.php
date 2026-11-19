@@ -31,6 +31,7 @@ $menu_secciones = [
             'inventario.php' => ['Inventario', ['inventario.php', 'inventario_form.php', 'inventario_salida.php'], 'inventario'],
             'ingresos.php'   => ['Ingresos',   ['ingresos.php', 'ingreso_form.php'], 'ingresos'],
             'egresos.php'    => ['Egresos',    ['egresos.php', 'egreso_form.php'], 'egresos'],
+            'reporte.php'    => ['Reporte',    ['reporte.php'], 'registros'],
         ],
     ],
     [
@@ -51,7 +52,7 @@ $menu_secciones = [
 ];
 // Quitar opciones sin acceso: solo admin ve inventario, ingresos, egresos y administración
 if (!es_admin()) {
-    unset($menu_secciones[0]['items']['inventario.php'], $menu_secciones[0]['items']['ingresos.php'], $menu_secciones[0]['items']['egresos.php']);
+    unset($menu_secciones[0]['items']['inventario.php'], $menu_secciones[0]['items']['ingresos.php'], $menu_secciones[0]['items']['egresos.php'], $menu_secciones[0]['items']['reporte.php']);
     unset($menu_secciones[2]);
     $menu_secciones = array_values($menu_secciones);
 }

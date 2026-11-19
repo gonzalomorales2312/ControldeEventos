@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS registros (
   subred VARCHAR(100) NOT NULL DEFAULT '',
   numero_boleta VARCHAR(50) NOT NULL UNIQUE,
   monto_boleta DECIMAL(12,2) NOT NULL,
+  imagen_boleta LONGTEXT NULL,  -- imagen de la boleta en base64 (opcional)
   activo TINYINT(1) NOT NULL DEFAULT 1,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

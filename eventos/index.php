@@ -55,7 +55,7 @@ require __DIR__ . '/includes/header.php';
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Nombre lanzado</th><th>Líder</th><th>Subred</th><th>Boleta</th><th>Monto</th><th>Estado</th><th></th>
+      <th>ID</th><th>Nombre lanzado</th><th>Líder</th><th>Subred</th><th>Boleta</th><th>Monto</th><th>Imagen</th><th>Estado</th><th></th>
     </tr>
   </thead>
   <tbody>
@@ -67,12 +67,13 @@ require __DIR__ . '/includes/header.php';
       <td><?= h($r['subred']) ?></td>
       <td><?= h($r['numero_boleta']) ?></td>
       <td class="num"><?= number_format((float) $r['monto_boleta'], 2) ?></td>
+      <td><?= !empty($r['imagen_boleta']) || !empty($r['tiene_imagen']) ? '<a href="boleta_descargar.php?id=' . (int) $r['id'] . '">Descargar</a>' : '—' ?></td>
       <td><?= $activo ? 'Activo' : 'Inactivo' ?></td>
       <td><a href="form.php?id=<?= (int) $r['id'] ?>">Editar</a><?= boton_estado((int) $r['id'], $activo) ?></td>
     </tr>
   <?php endforeach; ?>
   <?php if (!$filas && !$errores): ?>
-    <tr><td colspan="8" class="center">Sin registros</td></tr>
+    <tr><td colspan="9" class="center">Sin registros</td></tr>
   <?php endif; ?>
   </tbody>
 </table>
