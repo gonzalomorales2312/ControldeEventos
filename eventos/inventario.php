@@ -12,6 +12,8 @@ $agotados = ($_GET['agotados'] ?? '') === 'true';
 $filtros = ['estado' => $estado];
 if ($buscar !== '') $filtros['buscar'] = $buscar;
 if ($agotados) $filtros['agotados'] = 'true';
+// Solo el inventario del evento elegido en el menú
+if (evento_actual() !== null) $filtros['idevento'] = evento_actual();
 
 $res = api_auth('GET', '/inventario?' . http_build_query($filtros + ['page' => $page, 'limit' => $cfg['per_page']]));
 $errores = [];

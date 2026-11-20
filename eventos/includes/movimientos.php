@@ -16,6 +16,8 @@ $tipopersona = in_array($_GET['tipopersona'] ?? '', ['lider', 'lanzado'], true) 
 $filtros = ['estado' => $estado];
 if ($buscar !== '') $filtros['buscar'] = $buscar;
 if ($mov_tipo === 'ingreso' && $tipopersona !== '') $filtros['tipopersona'] = $tipopersona;
+// Solo los movimientos del evento elegido en el menú
+if (evento_actual() !== null) $filtros['idevento'] = evento_actual();
 
 $res = api_auth('GET', $mov_ruta . '?' . http_build_query($filtros + ['page' => $page, 'limit' => $cfg['per_page']]));
 $errores = [];

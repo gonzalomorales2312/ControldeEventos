@@ -6,7 +6,9 @@ requiere_admin();
 function traer_todos(string $ruta, array &$errores): array {
     $filas = [];
     for ($p = 1; $p <= 500; $p++) {
-        $res = api_auth('GET', $ruta . '?' . http_build_query(['estado' => 'activos', 'page' => $p, 'limit' => 100]));
+        $q = ['estado' => 'activos', 'page' => $p, 'limit' => 100];
+        if (evento_actual() !== null) $q['idevento'] = evento_actual(); // solo el evento elegido en el menú
+        $res = api_auth('GET', $ruta . '?' . http_build_query($q));
         if ($res['status'] !== 200) { $errores = array_merge($errores, api_errores($res)); break; }
         $lote = $res['data']['data'] ?? [];
         if (!$lote) break;

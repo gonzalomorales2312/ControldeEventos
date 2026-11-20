@@ -17,6 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Tipos que espera la API
     $payload = $reg;
     $payload['monto_boleta'] = is_numeric($reg['monto_boleta']) ? (float) $reg['monto_boleta'] : $reg['monto_boleta'];
+    // El evento se asigna solo al crear (el del menú); al editar el registro conserva el suyo
+    if (!$id) $payload['idevento'] = evento_actual();
 
     // Imagen de la boleta (opcional): se envía en base64 como data URI. Si no se sube, no se toca la existente.
     $archivo = $_FILES['imagen_boleta'] ?? null;
@@ -52,8 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = api_auth('GET', "/registros/$id");                     // GET: consultar uno
     if ($res['status'] === 200) {
         foreach ($campos as $c) $reg[$c] = $res['data'][$c] ?? '';
-        $tiene_imagen = !empty($res['data']['imagen_boleta']);
-        if (subred_usuario() !== null && $reg['subred'] !== subred_usuario()) {
+        $tiene_imagen = !empty($res['data']['imagen_boleta']) || !empty($res['data']['tiene_imagen']);        if (subred_usuario() !== null && $reg['subred'] !== subred_usuario()) {
             $_SESSION['flash_err'] = 'No tiene acceso a ese registro';
             header('Location: index.php');
             exit;

@@ -10,6 +10,8 @@ $estado = in_array($_GET['estado'] ?? '', ['activos', 'inactivos', 'todos'], tru
 
 $filtros = ['estado' => $estado];
 if ($buscar !== '') $filtros['buscar'] = $buscar;
+// Solo los registros del evento elegido en el menú
+if (evento_actual() !== null) $filtros['idevento'] = evento_actual();
 // Roles no admin: solo ven los registros de su subred
 $mi_subred = subred_usuario();
 if ($mi_subred !== null) $filtros['subred'] = $mi_subred;

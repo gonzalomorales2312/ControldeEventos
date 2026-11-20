@@ -26,6 +26,12 @@ body.con-menu.menu-colapsado { padding-left: var(--sb-ancho-min); }
 .grupo.cerrado .chev { transform: rotate(-90deg); }
 .grupo.cerrado .grupo-items { display: none; }
 .nav-sub { padding-left: 26px; }
+.nav-vacio { display: block; padding: 6px 12px 6px 26px; font-size: 13px; color: #93c5fd; }
+/* Ventana modal para elegir el evento */
+.modal-fondo { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-fondo[hidden] { display: none; }
+.modal-caja { background: #fff; border-radius: 14px; padding: 26px; width: 100%; max-width: 420px; box-shadow: 0 24px 60px rgba(0,0,0,.3); }
+.modal-caja h2 { margin: 0 0 16px; font-size: 20px; color: #1e3a8a; }
 .ico { width: 20px; height: 20px; flex: none; }
 .sidebar-pie { padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.15); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
 .sidebar-pie a { color: #bfdbfe; text-decoration: none; }

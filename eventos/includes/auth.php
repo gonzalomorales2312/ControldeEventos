@@ -1,5 +1,6 @@
 <?php
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
+// secure: la cookie de sesión solo viaja por HTTPS cuando el sitio se sirve con HTTPS (en local con http sigue funcionando)
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
 session_start();
 require_once __DIR__ . '/api.php';
 
@@ -12,6 +13,7 @@ function requiere_login(): void {
         header('Location: login.php');
         exit;
     }
+    evento_actual(); // fija el evento de trabajo (?ev=) antes de procesar la página
 }
 
 // ¿Es administrador? Admin = rol sin subred (acceso a todas las subredes)
@@ -64,11 +66,48 @@ function cargar_rol_sesion(array $loginData): void {
     foreach ($rr['data'] as $r) {
         if ((string) $r['idrol'] === (string) $idrol) {
             // Admin = rol llamado "admin" (o "administrador")
-            $_SESSION['es_admin'] = in_array(mb_strtolower(trim($r['nombrerol'])), ['admin', 'administrador'], true);
+            // La API marca el rol con es_admin; si no viene, se usa el nombre "admin"/"administrador"
+            $_SESSION['es_admin'] = !empty($r['es_admin'])
+                || in_array(mb_strtolower(trim($r['nombrerol'])), ['admin', 'administrador'], true);
             $_SESSION['subred'] = $_SESSION['es_admin'] || $subred === '' ? null : $subred;
             return;
         }
     }
+}
+
+// ---- Eventos ----
+// Todos los eventos (activos e inactivos), cacheados por petición
+function eventos_todos(): array {
+    static $lista = null;
+    if ($lista === null) {
+        $r = api_auth('GET', '/eventos?estado=todos');
+        $lista = $r['status'] === 200 ? ($r['data']['data'] ?? []) : [];
+    }
+    return $lista;
+}
+
+function evento_etiqueta(array $e): string {
+    return $e['tipoevento'] . ' — ' . $e['descripcionevento'];
+}
+
+// Eventos activos de tipo Lanzamiento (los que aparecen en el menú)
+function eventos_lanzamiento(): array {
+    return array_values(array_filter(eventos_todos(), fn($e) => $e['activo'] && mb_strtolower(trim($e['tipoevento'])) === 'lanzamiento'));
+}
+
+// Evento en el que se está trabajando. Se fija con ?ev=N (enlaces del menú) y se recuerda en la sesión;
+// sin elección es null (el menú pide elegirlo en una ventana). Nunca se muestra: las pantallas lo usan para filtrar y para asignar idevento.
+function evento_actual(): ?int {
+    static $calculado = false, $valor = null;
+    if ($calculado) return $valor;
+    $calculado = true;
+    $validos = array_map(fn($e) => (int) $e['idevento'], eventos_lanzamiento());
+    $ev = isset($_GET['ev']) && ctype_digit((string) $_GET['ev']) ? (int) $_GET['ev'] : null;
+    if ($ev !== null && in_array($ev, $validos, true)) $_SESSION['evento_actual'] = $ev;
+    $guardado = $_SESSION['evento_actual'] ?? null;
+    $valor = in_array($guardado, $validos, true) ? $guardado : null;
+    $_SESSION['evento_actual'] = $valor;
+    return $valor;
 }
 
 function csrf_token(): string {

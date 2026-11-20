@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $payload = ['descripcion' => $reg['descripcion']];
     $payload['valor'] = is_numeric($reg['valor']) ? (float) $reg['valor'] : $reg['valor'];
     $payload['existencia'] = ctype_digit($reg['existencia']) ? (int) $reg['existencia'] : ($reg['existencia'] === '' ? 0 : $reg['existencia']);
+    if (!$id) $payload['idevento'] = evento_actual(); // evento del menú; al editar se conserva el suyo
 
     $res = $id ? api_auth('PUT', "/inventario/$id", $payload) : api_auth('POST', '/inventario', $payload);
     if (in_array($res['status'], [200, 201], true)) {
@@ -25,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } elseif ($id) {
     $res = api_auth('GET', "/inventario/$id");
     if ($res['status'] === 200) {
-        foreach ($campos as $c) $reg[$c] = $res['data'][$c] ?? '';
-    } else {
+        foreach ($campos as $c) $reg[$c] = $res['data'][$c] ?? '';    } else {
         $errores = api_errores($res);
     }
 }

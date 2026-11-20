@@ -25,8 +25,20 @@ CREATE TABLE IF NOT EXISTS usuarios (
   CONSTRAINT fk_usuarios_rol FOREIGN KEY (idrol) REFERENCES roles (idrol)
 );
 
+-- Eventos: permiten llevar el control de varios eventos. registros, ingresosegresos e inventario
+-- tienen un idevento (opcional) que apunta a esta tabla.
+CREATE TABLE IF NOT EXISTS eventos (
+  idevento INT AUTO_INCREMENT PRIMARY KEY,
+  tipoevento VARCHAR(100) NOT NULL,
+  descripcionevento VARCHAR(255) NOT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS inventario (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  idevento INT NULL,
   descripcion VARCHAR(255) NOT NULL,
   valor DECIMAL(12,2) NOT NULL,                 -- valor TOTAL de la existencia
   existencia INT UNSIGNED NOT NULL DEFAULT 0,
@@ -34,12 +46,14 @@ CREATE TABLE IF NOT EXISTS inventario (
   preciounitario DECIMAL(12,2) GENERATED ALWAYS AS (IF(existencia > 0, valor / existencia, NULL)) STORED,
   activo TINYINT(1) NOT NULL DEFAULT 1,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_inventario_evento FOREIGN KEY (idevento) REFERENCES eventos (idevento)
 );
 
 -- nombre_lanzado puede quedar vacío: en ese caso quien paga es el líder
 CREATE TABLE IF NOT EXISTS registros (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  idevento INT NULL,
   nombre_lanzado VARCHAR(150) NOT NULL DEFAULT '',
   nombre_lider VARCHAR(150) NOT NULL,
   subred VARCHAR(100) NOT NULL DEFAULT '',
@@ -48,7 +62,8 @@ CREATE TABLE IF NOT EXISTS registros (
   imagen_boleta LONGTEXT NULL,  -- imagen de la boleta en base64 (opcional)
   activo TINYINT(1) NOT NULL DEFAULT 1,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_registros_evento FOREIGN KEY (idevento) REFERENCES eventos (idevento)
 );
 
 -- Egresos: vvalor es el total pagado; cantidad e idinventario enlazan el egreso con el inventario;
@@ -58,6 +73,7 @@ CREATE TABLE IF NOT EXISTS registros (
 CREATE TABLE IF NOT EXISTS ingresosegresos (
   id INT AUTO_INCREMENT PRIMARY KEY,
   tipoingresoegreso ENUM('ingreso','egreso') NOT NULL,
+  idevento INT NULL,
   descripcion VARCHAR(255) NOT NULL,
   vvalor DECIMAL(12,2) NOT NULL,
   observaciones TEXT NULL,
@@ -71,7 +87,8 @@ CREATE TABLE IF NOT EXISTS ingresosegresos (
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_ie_inventario FOREIGN KEY (idinventario) REFERENCES inventario (id),
-  CONSTRAINT fk_ie_registro FOREIGN KEY (idregistro) REFERENCES registros (id)
+  CONSTRAINT fk_ie_registro FOREIGN KEY (idregistro) REFERENCES registros (id),
+  CONSTRAINT fk_ingresosegresos_evento FOREIGN KEY (idevento) REFERENCES eventos (idevento)
 );
 
 CREATE TABLE IF NOT EXISTS salidas_inventario (

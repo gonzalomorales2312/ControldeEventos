@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'vvalor'        => is_numeric($reg['vvalor']) ? (float) $reg['vvalor'] : $reg['vvalor'],
         'observaciones' => $reg['observaciones'],
     ];
+    if (!$id) $payload['idevento'] = evento_actual(); // evento del menú; al editar se conserva el suyo
     // Todo egreso entra al inventario: sin artículo elegido la API crea uno nuevo
     if (!$id && $reg['idinventario'] !== '') $payload['idinventario'] = (int) $reg['idinventario'];
 
@@ -35,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($res['status'] === 200) {
         $e = $res['data']['egreso'] ?? $res['data'];
         foreach (['descripcion', 'cantidad', 'vvalor', 'observaciones'] as $c) $reg[$c] = $e[$c] ?? '';
-        $reg['idinventario'] = (string) ($e['idinventario'] ?? '');
-    } else {
+        $reg['idinventario'] = (string) ($e['idinventario'] ?? '');    } else {
         $errores = api_errores($res);
         $bloqueado = true;
     }

@@ -3,11 +3,13 @@ const pool = require('../config/db');
 
 const router = express.Router();
 
-const CAMPOS = ['nombre_lanzado', 'nombre_lider', 'subred', 'numero_boleta', 'monto_boleta', 'imagen_boleta'];
+const { errorEvento, condicionEvento } = require('../lib/eventos');
+
+const CAMPOS = ['idevento', 'nombre_lanzado', 'nombre_lider', 'subred', 'numero_boleta', 'monto_boleta', 'imagen_boleta'];
 
 // Columnas del listado: no incluye la imagen (pesada); se indica con tiene_imagen y se obtiene con GET /:id
 const COLUMNAS_LISTA =
-  'id, nombre_lanzado, nombre_lider, subred, numero_boleta, monto_boleta, (imagen_boleta IS NOT NULL) AS tiene_imagen, activo, creado_en, actualizado_en';
+  'id, idevento, nombre_lanzado, nombre_lider, subred, numero_boleta, monto_boleta, (imagen_boleta IS NOT NULL) AS tiene_imagen, activo, creado_en, actualizado_en';
 
 // Acepta base64 puro o un data URI (data:image/png;base64,....)
 const RE_BASE64 = /^(data:image\/[a-zA-Z0-9.+-]+;base64,)?[A-Za-z0-9+/\r\n]+={0,2}$/;
@@ -59,6 +61,7 @@ function datosIngreso(r) {
     vvalor: r.monto_boleta,
     tipopersona: lanzado ? 'lanzado' : 'lider',
     nombrepersona: lanzado || r.nombre_lider,
+    idevento: r.idevento,
   };
 }
 
@@ -98,6 +101,12 @@ router.get('/', async (req, res) => {
     if (buscar) {
       condiciones.push('(nombre_lanzado LIKE ? OR nombre_lider LIKE ? OR subred LIKE ? OR numero_boleta LIKE ?)');
       params.push(buscar, buscar, buscar, buscar);
+    }
+    const ev = condicionEvento(req.query);
+    if (ev.error) return res.status(400).json({ error: ev.error });
+    if (ev.sql) {
+      condiciones.push(ev.sql);
+      params.push(...ev.params);
     }
     if (req.usuario.subred !== null) {
       condiciones.push('subred = ?');
@@ -140,6 +149,14 @@ router.post('/', async (req, res) => {
   if (errores.length) return res.status(400).json({ errores });
   body.nombre_lanzado = limpioLanzado(body.nombre_lanzado);
 
+  try {
+    const eEvento = await errorEvento(body.idevento);
+    if (eEvento) return res.status(400).json({ error: eEvento });
+  } catch (err) {
+    return errorInterno(res, err);
+  }
+  body.idevento = body.idevento ?? null;
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -152,9 +169,9 @@ router.post('/', async (req, res) => {
 
     const d = datosIngreso(registro);
     const [ing] = await conn.query(
-      `INSERT INTO ingresosegresos (tipoingresoegreso, descripcion, vvalor, observaciones, tipopersona, nombrepersona, idregistro)
-       VALUES ('ingreso', ?, ?, ?, ?, ?, ?)`,
-      [d.descripcion, d.vvalor, `Generado automáticamente desde el registro #${registro.id}`, d.tipopersona, d.nombrepersona, registro.id]
+      `INSERT INTO ingresosegresos (tipoingresoegreso, descripcion, vvalor, observaciones, tipopersona, nombrepersona, idregistro, idevento)
+       VALUES ('ingreso', ?, ?, ?, ?, ?, ?, ?)`,
+      [d.descripcion, d.vvalor, `Generado automáticamente desde el registro #${registro.id}`, d.tipopersona, d.nombrepersona, registro.id, d.idevento]
     );
     const [[ingreso]] = await conn.query('SELECT * FROM ingresosegresos WHERE id = ?', [ing.insertId]);
 
@@ -183,6 +200,13 @@ router.put('/:id', async (req, res) => {
   const valor = (c) =>
     c === 'nombre_lanzado' ? limpioLanzado(body[c]) : c === 'imagen_boleta' ? body[c] || null : body[c];
 
+  try {
+    const eEvento = await errorEvento(body.idevento);
+    if (eEvento) return res.status(400).json({ error: eEvento });
+  } catch (err) {
+    return errorInterno(res, err);
+  }
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -200,8 +224,8 @@ router.put('/:id', async (req, res) => {
     const [[registro]] = await conn.query('SELECT * FROM registros WHERE id = ?', [req.params.id]);
     const d = datosIngreso(registro);
     await conn.query(
-      'UPDATE ingresosegresos SET descripcion = ?, vvalor = ?, tipopersona = ?, nombrepersona = ? WHERE idregistro = ?',
-      [d.descripcion, d.vvalor, d.tipopersona, d.nombrepersona, registro.id]
+      'UPDATE ingresosegresos SET descripcion = ?, vvalor = ?, tipopersona = ?, nombrepersona = ?, idevento = ? WHERE idregistro = ?',
+      [d.descripcion, d.vvalor, d.tipopersona, d.nombrepersona, d.idevento, registro.id]
     );
 
     await conn.commit();

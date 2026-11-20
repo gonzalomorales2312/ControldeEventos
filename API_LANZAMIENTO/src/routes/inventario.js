@@ -1,9 +1,10 @@
 const express = require('express');
 const pool = require('../config/db');
+const { errorEvento, condicionEvento } = require('../lib/eventos');
 
 const router = express.Router();
 
-const CAMPOS = ['descripcion', 'valor', 'existencia'];
+const CAMPOS = ['idevento', 'descripcion', 'valor', 'existencia'];
 
 // Valida los datos. Si parcial=true (PUT) solo valida los campos enviados.
 // existencia es opcional al crear (por defecto 0).
@@ -55,6 +56,12 @@ router.get('/', async (req, res) => {
       params.push(`%${req.query.buscar}%`);
     }
     if (req.query.agotados === 'true') condiciones.push('existencia = 0');
+    const ev = condicionEvento(req.query);
+    if (ev.error) return res.status(400).json({ error: ev.error });
+    if (ev.sql) {
+      condiciones.push(ev.sql);
+      params.push(...ev.params);
+    }
     const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
 
     const [[resumen]] = await pool.query(
@@ -181,9 +188,12 @@ router.post('/', async (req, res) => {
   if (errores.length) return res.status(400).json({ errores });
 
   try {
+    const eEvento = await errorEvento(body.idevento);
+    if (eEvento) return res.status(400).json({ error: eEvento });
+
     const [result] = await pool.query(
-      'INSERT INTO inventario (descripcion, valor, existencia) VALUES (?, ?, ?)',
-      [body.descripcion.trim(), body.valor, body.existencia ?? 0]
+      'INSERT INTO inventario (idevento, descripcion, valor, existencia) VALUES (?, ?, ?, ?)',
+      [body.idevento ?? null, body.descripcion.trim(), body.valor, body.existencia ?? 0]
     );
     res.status(201).json(await buscar(result.insertId));
   } catch (err) {
@@ -201,9 +211,12 @@ router.put('/:id', async (req, res) => {
   if (errores.length) return res.status(400).json({ errores });
 
   try {
+    const eEvento = await errorEvento(body.idevento);
+    if (eEvento) return res.status(400).json({ error: eEvento });
+
     const [result] = await pool.query(
       `UPDATE inventario SET ${enviados.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`,
-      [...enviados.map((c) => (c === 'descripcion' ? body[c].trim() : body[c])), req.params.id]
+      [...enviados.map((c) => (c === 'descripcion' ? body[c].trim() : body[c])), req.params.id] // idevento null = sin evento
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Artículo no encontrado' });
     res.json(await buscar(req.params.id));

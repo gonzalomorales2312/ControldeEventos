@@ -26,13 +26,8 @@ $menu_secciones = [
         'titulo' => 'Control de Lanzamientos',
         'icono'  => 'grupo',
         'href'   => null,
-        'items'  => [
-            'index.php'      => ['Registro',   ['index.php', 'form.php'], 'registros'],
-            'inventario.php' => ['Inventario', ['inventario.php', 'inventario_form.php', 'inventario_salida.php'], 'inventario'],
-            'ingresos.php'   => ['Ingresos',   ['ingresos.php', 'ingreso_form.php'], 'ingresos'],
-            'egresos.php'    => ['Egresos',    ['egresos.php', 'egreso_form.php'], 'egresos'],
-            'reporte.php'    => ['Reporte',    ['reporte.php'], 'registros'],
-        ],
+        'items'  => [],
+        'arbol'  => true, // árbol: un subgrupo por evento de lanzamiento con sus opciones
     ],
     [
         'titulo' => 'Control de Encuentros',
@@ -45,17 +40,33 @@ $menu_secciones = [
         'icono'  => 'admin',
         'href'   => null,
         'items'  => [
+            'eventos.php'  => ['Eventos',  ['eventos.php', 'evento_form.php'], 'encuentros'],
             'usuarios.php' => ['Usuarios', ['usuarios.php', 'usuario_form.php'], 'usuarios'],
             'roles.php'    => ['Roles',    ['roles.php', 'rol_form.php'], 'roles'],
         ],
     ],
 ];
-// Quitar opciones sin acceso: solo admin ve inventario, ingresos, egresos y administración
+// Opciones de cada evento de lanzamiento. Solo admin ve inventario, ingresos, egresos, reporte y administración.
+$menu_opc_evento = [
+    'index.php' => ['Registro', ['index.php', 'form.php'], 'registros', false],
+    'inventario.php' => ['Inventario', ['inventario.php', 'inventario_form.php', 'inventario_salida.php'], 'inventario', true],
+    'ingresos.php' => ['Ingresos', ['ingresos.php', 'ingreso_form.php'], 'ingresos', true],
+    'egresos.php' => ['Egresos', ['egresos.php', 'egreso_form.php'], 'egresos', true],
+    'reporte.php' => ['Reporte', ['reporte.php'], 'registros', true],
+];
 if (!es_admin()) {
-    unset($menu_secciones[0]['items']['inventario.php'], $menu_secciones[0]['items']['ingresos.php'], $menu_secciones[0]['items']['egresos.php'], $menu_secciones[0]['items']['reporte.php']);
+    $menu_opc_evento = array_filter($menu_opc_evento, fn($o) => !$o[3]);
     unset($menu_secciones[2]);
     $menu_secciones = array_values($menu_secciones);
 }
+// En el login no hay token: no consultar la API
+$menu_eventos = $logueado ? eventos_lanzamiento() : [];
+$menu_ev_actual = $logueado ? evento_actual() : null;
+$menu_ev_etiqueta = '';
+foreach ($menu_eventos as $m_ev) if ((int) $m_ev['idevento'] === $menu_ev_actual) $menu_ev_etiqueta = $m_ev['descripcionevento'];
+// Página de un módulo de lanzamientos (su lista principal es el primer archivo de la opción)
+$menu_pagina_lanz = null;
+foreach ($menu_opc_evento as $m_o) if (in_array($menu_actual, $m_o[1], true)) $menu_pagina_lanz = $m_o[1][0];
 // Sección actual (para el título de la barra superior en móvil)
 $menu_titulo_actual = 'Control de Lanzamientos';
 foreach ($menu_secciones as $m_sec) {
@@ -91,6 +102,24 @@ foreach ($menu_secciones as $m_sec) {
         <a href="<?= h($m_sec['href']) ?>" class="nav-item nav-raiz <?= $menu_actual === $m_sec['href'] ? 'activo' : '' ?>" title="<?= h($m_sec['titulo']) ?>">
           <?= menu_svg($menu_iconos, $m_sec['icono']) ?><span class="txt"><?= h($m_sec['titulo']) ?></span>
         </a>
+      <?php elseif (!empty($m_sec['arbol'])):
+        $m_abierto = false;
+        foreach ($menu_opc_evento as $m_arch_h => $m_o) if (in_array($menu_actual, $m_o[1], true)) $m_abierto = true;
+      ?>
+        <div class="grupo <?= $m_abierto ? '' : 'cerrado' ?>">
+          <button type="button" class="nav-item nav-grupo" aria-expanded="<?= $m_abierto ? 'true' : 'false' ?>" title="Elegir evento"
+            onclick="this.parentNode.classList.remove('cerrado');this.setAttribute('aria-expanded','true');abrirModalEvento()">
+            <?= menu_svg($menu_iconos, $m_sec['icono']) ?><span class="txt"><?= h($m_sec['titulo']) ?></span><span class="chev txt">&#9662;</span>
+          </button>
+          <div class="grupo-items">
+            <?php if ($menu_ev_etiqueta !== ''): ?><span class="nav-vacio txt">Evento: <?= h($menu_ev_etiqueta) ?></span><?php endif; ?>
+            <?php foreach ($menu_opc_evento as $m_href => [$m_texto, $m_archivos, $m_icono]): ?>
+              <a href="<?= h($m_href) ?>" class="nav-item nav-sub <?= in_array($menu_actual, $m_archivos, true) ? 'activo' : '' ?>" title="<?= h($m_texto) ?>">
+                <?= menu_svg($menu_iconos, $m_icono) ?><span class="txt"><?= h($m_texto) ?></span>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </div>
       <?php else:
         $m_abierto = false;
         foreach ($m_sec['items'] as [$m_t, $m_arch, $m_i]) if (in_array($menu_actual, $m_arch, true)) $m_abierto = true;
@@ -117,5 +146,37 @@ foreach ($menu_secciones as $m_sec) {
   </div>
 </aside>
 <div class="sidebar-fondo" onclick="document.body.classList.remove('menu-abierto')"></div>
+
+<?php // Ventana para elegir el evento de lanzamiento. Sin evento elegido se abre sola en las pantallas de lanzamientos y no se puede cerrar.
+$m_modal_auto = $menu_ev_actual === null && $menu_pagina_lanz !== null; ?>
+<div class="modal-fondo" id="modal-evento" <?= $m_modal_auto ? '' : 'hidden' ?> data-obligatorio="<?= $menu_ev_actual === null ? '1' : '0' ?>">
+  <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-evento-titulo">
+    <h2 id="modal-evento-titulo">Control de Lanzamientos</h2>
+    <?php if ($menu_eventos): ?>
+      <form method="get" action="<?= h($menu_pagina_lanz ?? 'index.php') ?>">
+        <label>Seleccione el evento
+          <select name="ev" required>
+            <?php if ($menu_ev_actual === null): ?><option value="">Seleccione...</option><?php endif; ?>
+            <?php foreach ($menu_eventos as $m_ev): ?>
+              <option value="<?= (int) $m_ev['idevento'] ?>" <?= (int) $m_ev['idevento'] === $menu_ev_actual ? 'selected' : '' ?>><?= h($m_ev['descripcionevento']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <div class="actions">
+          <button type="submit">Continuar</button>
+          <?php if ($menu_ev_actual !== null): ?><a href="#" onclick="cerrarModalEvento();return false">Cancelar</a><?php endif; ?>
+        </div>
+      </form>
+    <?php else: ?>
+      <p>No hay eventos de lanzamiento activos.<?= es_admin() ? ' <a href="eventos.php">Crear un evento</a>' : ' Pida al administrador que cree uno.' ?></p>
+      <?php if ($menu_ev_actual !== null || !$m_modal_auto): ?><div class="actions"><a href="#" onclick="cerrarModalEvento();return false">Cerrar</a></div><?php endif; ?>
+    <?php endif; ?>
+  </div>
+</div>
+<script>
+function abrirModalEvento() { document.getElementById('modal-evento').hidden = false; }
+function cerrarModalEvento() { var m = document.getElementById('modal-evento'); if (m.dataset.obligatorio !== '1') m.hidden = true; }
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarModalEvento(); });
+</script>
 <?php endif; ?>
 <main class="container">

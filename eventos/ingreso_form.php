@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $payload = $reg;
     $payload['vvalor'] = is_numeric($reg['vvalor']) ? (float) $reg['vvalor'] : $reg['vvalor'];
+    if (!$id) $payload['idevento'] = evento_actual(); // evento del menú; al editar se conserva el suyo
 
     $res = $id ? api_auth('PUT', "/ingresos/$id", $payload) : api_auth('POST', '/ingresos', $payload);
     if (in_array($res['status'], [200, 201], true)) {
@@ -25,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } elseif ($id) {
     $res = api_auth('GET', "/ingresos/$id");
     if ($res['status'] === 200) {
-        foreach ($campos as $c) $reg[$c] = $res['data'][$c] ?? '';
-    } else {
+        foreach ($campos as $c) $reg[$c] = $res['data'][$c] ?? '';    } else {
         $errores = api_errores($res);
         $bloqueado = true;
     }

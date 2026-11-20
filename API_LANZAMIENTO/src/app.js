@@ -8,6 +8,8 @@ const auth = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const registrosRoutes = require('./routes/registros');
 const rolesRoutes = require('./routes/roles');
+const eventosRoutes = require('./routes/eventos');
+const { condicionEvento } = require('./lib/eventos');
 const crearMovimientos = require('./routes/movimientos');
 const pool = require('./config/db');
 const inventarioRoutes = require('./routes/inventario');
@@ -33,6 +35,8 @@ app.use('/api/auth', authRoutes);
 // 3) Rutas protegidas: x-api-key + Bearer token
 app.use('/api/registros', auth, registrosRoutes);
 app.use('/api/roles', auth, auth.soloAdmin, rolesRoutes);
+// Eventos: lectura para todo usuario autenticado; crear/modificar/inactivar solo admin (ver routes/eventos.js)
+app.use('/api/eventos', auth, eventosRoutes);
 // Ingresos y egresos son endpoints separados; ambos son solo para el rol admin.
 app.use('/api/ingresos', auth, auth.soloAdmin, crearMovimientos('ingreso'));
 app.use('/api/egresos', auth, auth.soloAdmin, crearMovimientos('egreso'));
@@ -40,10 +44,14 @@ app.use('/api/egresos', auth, auth.soloAdmin, crearMovimientos('egreso'));
 // GET /api/balance: totales de ingresos, egresos y balance (activos). Solo admin.
 app.get('/api/balance', auth, auth.soloAdmin, async (req, res) => {
   try {
+    // ?idevento=N filtra por evento (idevento=null: movimientos sin evento)
+    const ev = condicionEvento(req.query);
+    if (ev.error) return res.status(400).json({ error: ev.error });
     const [[r]] = await pool.query(
       `SELECT COALESCE(SUM(CASE WHEN tipoingresoegreso = 'ingreso' THEN vvalor END), 0) AS total_ingresos,
               COALESCE(SUM(CASE WHEN tipoingresoegreso = 'egreso' THEN vvalor END), 0) AS total_egresos
-         FROM ingresosegresos WHERE activo = 1`
+         FROM ingresosegresos WHERE activo = 1${ev.sql ? ` AND ${ev.sql}` : ''}`,
+      ev.params || []
     );
     const ingresos = Number(r.total_ingresos);
     const egresos = Number(r.total_egresos);

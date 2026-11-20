@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../config/db');
+const { errorEvento, condicionEvento } = require('../lib/eventos');
 
 const TIPOS_PERSONA = ['lider', 'lanzado'];
 const COLUMNA_PERSONA = { lider: 'nombre_lider', lanzado: 'nombre_lanzado' };
@@ -105,8 +106,8 @@ function crearRouter(tipo) {
   const esEgreso = tipo === 'egreso';
   const noEncontrado = esEgreso ? 'Egreso no encontrado' : 'Ingreso no encontrado';
   const CAMPOS = esEgreso
-    ? ['descripcion', 'vvalor', 'cantidad', 'observaciones']
-    : ['descripcion', 'vvalor', 'observaciones', 'tipopersona', 'nombrepersona'];
+    ? ['idevento', 'descripcion', 'vvalor', 'cantidad', 'observaciones']
+    : ['idevento', 'descripcion', 'vvalor', 'observaciones', 'tipopersona', 'nombrepersona'];
 
   async function buscar(id) {
     const [rows] = await pool.query('SELECT * FROM ingresosegresos WHERE id = ? AND tipoingresoegreso = ?', [id, tipo]);
@@ -146,6 +147,12 @@ function crearRouter(tipo) {
       if (req.query.buscar) {
         condiciones.push('(descripcion LIKE ? OR observaciones LIKE ? OR nombrepersona LIKE ?)');
         params.push(`%${req.query.buscar}%`, `%${req.query.buscar}%`, `%${req.query.buscar}%`);
+      }
+      const ev = condicionEvento(req.query);
+      if (ev.error) return res.status(400).json({ error: ev.error });
+      if (ev.sql) {
+        condiciones.push(ev.sql);
+        params.push(...ev.params);
       }
       const where = `WHERE ${condiciones.join(' AND ')}`;
 
@@ -205,13 +212,16 @@ function crearRouter(tipo) {
       if (errores.length) return res.status(400).json({ errores });
 
       try {
+        const eEvento = await errorEvento(b.idevento);
+        if (eEvento) return res.status(400).json({ error: eEvento });
+
         const nombre = await resolverPersona(req, b.tipopersona, b.nombrepersona);
         if (!nombre) {
           return res.status(400).json({ error: `"${b.nombrepersona.trim()}" no existe en registros como ${b.tipopersona}` });
         }
         const [result] = await pool.query(
-          'INSERT INTO ingresosegresos (tipoingresoegreso, descripcion, vvalor, observaciones, tipopersona, nombrepersona) VALUES (?, ?, ?, ?, ?, ?)',
-          [tipo, b.descripcion.trim(), b.vvalor, textoOpcional(b.observaciones), b.tipopersona, nombre]
+          'INSERT INTO ingresosegresos (tipoingresoegreso, idevento, descripcion, vvalor, observaciones, tipopersona, nombrepersona) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [tipo, b.idevento ?? null, b.descripcion.trim(), b.vvalor, textoOpcional(b.observaciones), b.tipopersona, nombre]
         );
         res.status(201).json(await buscar(result.insertId));
       } catch (err) {
@@ -231,6 +241,9 @@ function crearRouter(tipo) {
       try {
         const actual = await buscar(req.params.id);
         if (!actual) return res.status(404).json({ error: noEncontrado });
+
+        const eEvento = await errorEvento(b.idevento);
+        if (eEvento) return res.status(400).json({ error: eEvento });
 
         if (b.tipopersona !== undefined || b.nombrepersona !== undefined) {
           const tp = b.tipopersona ?? actual.tipopersona;
@@ -289,14 +302,27 @@ function crearRouter(tipo) {
     try {
       await conn.beginTransaction();
 
+      const eEvento = await errorEvento(b.idevento, conn);
+      if (eEvento) {
+        await conn.rollback();
+        return res.status(400).json({ error: eEvento });
+      }
+      let idevento = b.idevento ?? null;
+
       let idinventario = b.idinventario ?? null;
       if (idinventario === null) {
+        // El artículo nuevo pertenece al mismo evento que el egreso
         const [r] = await conn.query(
-          'INSERT INTO inventario (descripcion, valor, existencia) VALUES (?, ?, ?)',
-          [descripcion, b.vvalor, b.cantidad]
+          'INSERT INTO inventario (idevento, descripcion, valor, existencia) VALUES (?, ?, ?, ?)',
+          [idevento, descripcion, b.vvalor, b.cantidad]
         );
         idinventario = r.insertId;
       } else {
+        // Sin idevento en el body, el egreso hereda el evento del artículo existente
+        if (idevento === null && b.idevento === undefined) {
+          const [[art]] = await conn.query('SELECT idevento FROM inventario WHERE id = ?', [idinventario]);
+          if (art) idevento = art.idevento;
+        }
         const fallo = await ajustarInventario(conn, idinventario, b.cantidad, b.vvalor);
         if (fallo) {
           await conn.rollback();
@@ -306,9 +332,9 @@ function crearRouter(tipo) {
       }
 
       const [e] = await conn.query(
-        `INSERT INTO ingresosegresos (tipoingresoegreso, descripcion, vvalor, observaciones, idinventario, cantidad)
-         VALUES ('egreso', ?, ?, ?, ?, ?)`,
-        [descripcion, b.vvalor, textoOpcional(b.observaciones), idinventario, b.cantidad]
+        `INSERT INTO ingresosegresos (tipoingresoegreso, idevento, descripcion, vvalor, observaciones, idinventario, cantidad)
+         VALUES ('egreso', ?, ?, ?, ?, ?, ?)`,
+        [idevento, descripcion, b.vvalor, textoOpcional(b.observaciones), idinventario, b.cantidad]
       );
       await conn.commit();
 
@@ -342,6 +368,12 @@ function crearRouter(tipo) {
         return res.status(404).json({ error: noEncontrado });
       }
       const actual = rows[0];
+
+      const eEvento = await errorEvento(b.idevento, conn);
+      if (eEvento) {
+        await conn.rollback();
+        return res.status(400).json({ error: eEvento });
+      }
 
       // Solo se toca el inventario si el egreso está activo y enlazado a un artículo
       if (actual.idinventario !== null && actual.activo) {
